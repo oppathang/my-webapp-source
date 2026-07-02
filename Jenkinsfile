@@ -22,19 +22,18 @@ pipeline {
     }
     
     environment {
-        // 1. Định nghĩa địa chỉ máy chủ Registry của GitLab
-        REGISTRY_URL = "registry.gitlab.com"
+        // 1. Đường dẫn Registry của GitHub
+        REGISTRY_URL = "ghcr.io"
         
-        // 2. SỬA CHỖ NÀY: Thay <username-gitlab> và <ten-repo-code> bằng thông tin thật của bạn
-        // Cấu trúc chuẩn của GitLab: registry.gitlab.com/username/ten-repo/ten-image
-        DOCKER_IMAGE = "${REGISTRY_URL}/oppathang/my-webapp-source/my-webapp"
+        // Cấu trúc chuẩn của GitHub: ghcr.io/username/ten-image
+        DOCKER_IMAGE = "${REGISTRY_URL}/oppathang/my-webapp"
         
         TAG = "v_${BUILD_NUMBER}"
         DOCKER_HOST = "tcp://localhost:2375"
     }
     
     stages {
-        stage('Build & Push to GitLab Registry') {
+        stage('Build & Push to GitHub Packages') {
             steps {
                 container('docker') {
                     script {
@@ -43,12 +42,12 @@ pipeline {
                         // Đóng gói ứng dụng
                         sh "docker build -t ${DOCKER_IMAGE}:${TAG} ."
                         
-                        // Đăng nhập vào hệ thống Registry của GitLab bằng ID mới tạo
-                        withCredentials([usernamePassword(credentialsId: 'dockerhub-login', passwordVariable: 'GITLAB_PASS', usernameVariable: 'GITLAB_USER')]) {
-                            sh "echo \"${GITLAB_PASS}\" | docker login ${REGISTRY_URL} -u \"${GITLAB_USER}\" --password-stdin"
+                        // Sử dụng chính cái 'github-token' của bạn để đăng nhập vào ghcr.io
+                        withCredentials([usernamePassword(credentialsId: 'github-token', passwordVariable: 'GH_TOKEN', usernameVariable: 'GH_USER')]) {
+                            sh 'echo $GH_TOKEN | docker login ghcr.io -u $GH_USER --password-stdin'
                         }
                         
-                        // Đẩy Image lên kho lưu trữ của GitLab
+                        // Đẩy Image lên GitHub Packages
                         sh "docker push ${DOCKER_IMAGE}:${TAG}"
                     }
                 }
@@ -58,21 +57,21 @@ pipeline {
         stage('Update K8s Manifest') {
             steps {
                 container('jnlp') {
+                    // Sử dụng tiếp 'github-token' để clone và push code sửa đổi cấu hình K8s
                     withCredentials([usernamePassword(credentialsId: 'github-token', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
                         script {
-                            // Tải repo cấu hình manifest về để cập nhật
                             sh '''
                             git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/oppathang/my-webapp-manifests.git
                             cd my-webapp-manifests
                             
-                            # Cập nhật đường dẫn Image mới (lúc này đã thành registry.gitlab.com/...)
+                            # Sửa dòng chứa image sang đường dẫn ghcr.io mới
                             sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${TAG}|g" deployment.yaml
                             
                             git config user.name "Jenkins CI"
                             git config user.email "jenkins@example.com"
                             
                             git add deployment.yaml
-                            git commit -m "Update image to GitLab Registry ${TAG}"
+                            git commit -m "Update image to GHCR ${TAG}"
                             git push origin main
                             '''
                         }
