@@ -24,7 +24,7 @@ pipeline {
     
     environment {
         // Thông tin tài khoản Docker Hub
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-log')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-login')
         DOCKER_IMAGE = "oppathang/my-webapp-source"
         TAG = "v_${BUILD_NUMBER}"
         
