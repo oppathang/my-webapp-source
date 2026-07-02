@@ -44,7 +44,7 @@ pipeline {
                         sh "docker build -t ${DOCKER_IMAGE}:${TAG} ."
                         
                         // Đăng nhập vào hệ thống Registry của GitLab bằng ID mới tạo
-                        withCredentials([usernamePassword(credentialsId: 'gitlab-registry-login', passwordVariable: 'GITLAB_PASS', usernameVariable: 'GITLAB_USER')]) {
+                        withCredentials([usernamePassword(credentialsId: 'dockerhub-login', passwordVariable: 'GITLAB_PASS', usernameVariable: 'GITLAB_USER')]) {
                             sh "echo \"${GITLAB_PASS}\" | docker login ${REGISTRY_URL} -u \"${GITLAB_USER}\" --password-stdin"
                         }
                         
