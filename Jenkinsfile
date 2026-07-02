@@ -8,7 +8,6 @@ pipeline {
               containers:
               - name: docker
                 image: docker:24.0.5-dind
-                # 1. Ép Jenkins chạy lệnh khởi động Docker Daemon, không được ghi đè
                 command: ["dockerd-entrypoint.sh"]
                 args: ["--tls=false"]
                 securityContext:
@@ -23,22 +22,33 @@ pipeline {
     }
     
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-login')
-        DOCKER_IMAGE = "oppathang/my-webapp-source"
+        // 1. Định nghĩa địa chỉ máy chủ Registry của GitLab
+        REGISTRY_URL = "registry.gitlab.com"
+        
+        // 2. SỬA CHỖ NÀY: Thay <username-gitlab> và <ten-repo-code> bằng thông tin thật của bạn
+        // Cấu trúc chuẩn của GitLab: registry.gitlab.com/username/ten-repo/ten-image
+        DOCKER_IMAGE = "${REGISTRY_URL}/<username-gitlab>/my-webapp-source/my-webapp"
+        
         TAG = "v_${BUILD_NUMBER}"
         DOCKER_HOST = "tcp://localhost:2375"
     }
     
     stages {
-        stage('Build & Push Docker Image') {
+        stage('Build & Push to GitLab Registry') {
             steps {
                 container('docker') {
                     script {
-                        // 2. Chờ 5 giây để Docker daemon khởi động hoàn toàn trước khi build
                         sleep time: 5, unit: 'SECONDS'
                         
+                        // Đóng gói ứng dụng
                         sh "docker build -t ${DOCKER_IMAGE}:${TAG} ."
-                        sh "echo \$DOCKERHUB_CREDENTIALS_PSW | docker login -u \$DOCKERHUB_CREDENTIALS_USR --password-stdin"
+                        
+                        // Đăng nhập vào hệ thống Registry của GitLab bằng ID mới tạo
+                        withCredentials([usernamePassword(credentialsId: 'gitlab-registry-login', passwordVariable: 'GITLAB_PASS', usernameVariable: 'GITLAB_USER')]) {
+                            sh "echo \"${GITLAB_PASS}\" | docker login ${REGISTRY_URL} -u \"${GITLAB_USER}\" --password-stdin"
+                        }
+                        
+                        // Đẩy Image lên kho lưu trữ của GitLab
                         sh "docker push ${DOCKER_IMAGE}:${TAG}"
                     }
                 }
@@ -50,18 +60,19 @@ pipeline {
                 container('jnlp') {
                     withCredentials([usernamePassword(credentialsId: 'github-token', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
                         script {
-                            // Nhớ thay link này thành link repo manifests thật của bạn
+                            // Tải repo cấu hình manifest về để cập nhật
                             sh '''
                             git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/oppathang/my-webapp-manifests.git
                             cd my-webapp-manifests
                             
+                            # Cập nhật đường dẫn Image mới (lúc này đã thành registry.gitlab.com/...)
                             sed -i "s|image:.*|image: ${DOCKER_IMAGE}:${TAG}|g" deployment.yaml
                             
                             git config user.name "Jenkins CI"
                             git config user.email "jenkins@example.com"
                             
                             git add deployment.yaml
-                            git commit -m "Update image to ${TAG}"
+                            git commit -m "Update image to GitLab Registry ${TAG}"
                             git push origin main
                             '''
                         }
