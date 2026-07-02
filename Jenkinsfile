@@ -27,7 +27,7 @@ pipeline {
         
         // 2. SỬA CHỖ NÀY: Thay <username-gitlab> và <ten-repo-code> bằng thông tin thật của bạn
         // Cấu trúc chuẩn của GitLab: registry.gitlab.com/username/ten-repo/ten-image
-        DOCKER_IMAGE = "${REGISTRY_URL}/<username-gitlab>/my-webapp-source/my-webapp"
+        DOCKER_IMAGE = "${REGISTRY_URL}/oppathang/my-webapp-source/my-webapp"
         
         TAG = "v_${BUILD_NUMBER}"
         DOCKER_HOST = "tcp://localhost:2375"
